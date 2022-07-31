@@ -35,6 +35,7 @@
 #include "ap_mmn.h"
 #include "apr_tables.h"
 #include "util_script.h"
+#include "apr_uri.h"
 
 #ifdef APLOG_USE_MODULE
 APLOG_USE_MODULE(plpgsql);
@@ -109,14 +110,26 @@ static const char *plpgsql_dbname(cmd_parms *cmd, void *mconfig, const char *arg
 static int plpgsql_handler(request_rec *r)
 {
     apr_table_t *args = NULL;
+    apr_uri_t uri;
+    apr_status_t status;
 
     char conninfo[CONNECT_STRING_MAX_LENGTH];
     PGconn 	*conn;
     PGresult	*res;
+    ExecStatusType pgstatus;
+    char	*proc;
 
-   ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: entry");
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: entry");
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: filename=%s",r->filename );
+    status = apr_uri_parse(r->pool, r->uri, &uri);
+    if (status != APR_SUCCESS) {
+	ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: apr_uri_parse error");
+        return HTTP_INTERNAL_SERVER_ERROR;
+    }
 
-   plpgsqlConfig *config = (plpgsqlConfig *)
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: uri.path=%s", uri.path);
+
+    plpgsqlConfig *config = (plpgsqlConfig *)
         ap_get_module_config(r->per_dir_config, &plpgsql_module);
 
     if (strcmp(r->handler, "plpgsql-handler")) {
@@ -161,11 +174,20 @@ static int plpgsql_handler(request_rec *r)
 	return OK;
     }
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: connected to PG" );
+
     ap_set_content_type(r, "text");
     ap_rputs("Connected to PG ... \n", r);
-    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: filename=%s",r->filename );
 
     ap_args_to_table(r, &args);
+    /*
+     * procedure call syntax: /pg/<procedure>
+     */
+    proc = (char *)(uri.path + (4 * sizeof(char)));
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: calling proc=%s ...", proc );
+    res = PQexec(conn, "call p();");
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: ... proc=%s ended", proc );
+    pgstatus = PQresultStatus(res);
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: status=%s", PQresStatus(pgstatus));
 
 
     return OK;
@@ -174,7 +196,7 @@ static int plpgsql_handler(request_rec *r)
 
 static void register_hooks(apr_pool_t *p)
 {
-  ap_hook_handler(plpgsql_handler, NULL, NULL, APR_HOOK_MIDDLE);
+  ap_hook_handler(plpgsql_handler, NULL, NULL, APR_HOOK_LAST);
 }
 
 static const command_rec plpgsql_cmds[] = 
