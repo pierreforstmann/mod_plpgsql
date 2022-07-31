@@ -110,7 +110,7 @@ static const char *plpgsql_dbname(cmd_parms *cmd, void *mconfig, const char *arg
 static int plpgsql_handler(request_rec *r)
 {
     apr_table_t *args = NULL;
-    apr_uri_t uri;
+    apr_uri_t 	uri;
     apr_status_t status;
 
     char conninfo[CONNECT_STRING_MAX_LENGTH];
@@ -118,6 +118,10 @@ static int plpgsql_handler(request_rec *r)
     PGresult	*res;
     ExecStatusType pgstatus;
     char	*proc;
+    char	*stmt = NULL;
+    char	*cmdstatus;
+    char	*value;
+    int		i;
 
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: entry");
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: filename=%s",r->filename );
@@ -176,19 +180,32 @@ static int plpgsql_handler(request_rec *r)
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: connected to PG" );
 
     ap_set_content_type(r, "text");
-    ap_rputs("Connected to PG ... \n", r);
 
     ap_args_to_table(r, &args);
     /*
      * procedure call syntax: /pg/<procedure>
      */
     proc = (char *)(uri.path + (4 * sizeof(char)));
-    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: calling proc=%s ...", proc );
-    res = PQexec(conn, "call p();");
-    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: ... proc=%s ended", proc );
+    /*
+     * called procedure must write to a table because "raise notice" cannot be read with PQlib.
+     */
+    stmt = apr_psprintf(r->pool, "call %s();select t from output order by x;", proc);
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: running %s ...", stmt );
+    res = PQexec(conn, stmt);
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: ... ended");
     pgstatus = PQresultStatus(res);
-    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: status=%s", PQresStatus(pgstatus));
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: pgstatus=%s", PQresStatus(pgstatus));
+    cmdstatus = PQcmdStatus(res);
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: cmdstatus=%s", cmdstatus);
 
+    ap_set_content_type(r, "text/html");
+    for ( i = 0; i < PQntuples(res); i++)
+    {
+	    value = PQgetvalue(res, i, 0);
+	    ap_rputs(value, r);
+    }
+    PQclear(res); 
+    PQfinish(conn);
 
     return OK;
 
