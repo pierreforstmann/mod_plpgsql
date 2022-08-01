@@ -1,6 +1,8 @@
 # mod_plpgsql
 
-## setup (example on Alma Linux 8.6)
+## setup 
+
+Setup instructions are for Alma Linux 8.6.
 
 Install Apache and PostgreSQL development packages:
 
@@ -25,22 +27,25 @@ PGPort 5436
 PGDatabase test
 </Location>
 ```
-Build and install mod_plsql Apache module:
+Build and install mod_plpgsql Apache module:
 
 ```
+git clone https://github.com/pierreforstmann/mod_plpgsql.git
+cd mod_plpgsql
 make
 sudo make install
 
 ```
 
-Restart apache:
+Restart Apache:
 
 `sudo apachectl start`
 
 Run in PostgreSQL database:
 
-`psql -h localhost -p 5436 -U test < mod_plsql.sql`
+`psql -h localhost -p 5436 -U test < mod_plpgsql.sql`
 
+## test
 Run:
 ```
 curl http://localhost/pg/print
