@@ -165,18 +165,16 @@ static int plpgsql_handler(request_rec *r)
     if (PQstatus(conn) == CONNECTION_BAD)
     {
     	ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: %s", PQerrorMessage(conn));
-        ap_rputs("ERROR: cannot connect \n", r);
-	return OK;
+	return HTTP_INTERNAL_SERVER_ERROR;
     }
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: connected to PG" );
-
-    ap_set_content_type(r, "text");
-
     ap_args_to_table(r, &args);
+
     /*
      * procedure call syntax: /pg/<procedure>
      */
     proc = (char *)(uri.path + (4 * sizeof(char)));
+
     /*
      * called procedure must write to a table because "raise notice" cannot be read with PQlib.
      */
