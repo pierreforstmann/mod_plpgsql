@@ -42,7 +42,6 @@ APLOG_USE_MODULE(plpgsql);
 #endif
 
 #include "libpq-fe.h"
-#define CONNECT_STRING_MAX_LENGTH	100
 
 module AP_MODULE_DECLARE_DATA plpgsql;
 
@@ -113,7 +112,7 @@ static int plpgsql_handler(request_rec *r)
     apr_uri_t 	uri;
     apr_status_t status;
 
-    char conninfo[CONNECT_STRING_MAX_LENGTH];
+    char 	*conninfo;
     PGconn 	*conn;
     PGresult	*res;
     ExecStatusType pgstatus;
@@ -155,21 +154,13 @@ static int plpgsql_handler(request_rec *r)
         return OK;
     }
 
-    conninfo[0] = '\0';
-    strcat(conninfo, "host=");
-    strcat(conninfo, config->hostname);
-    strcat(conninfo, " ");
-    strcat(conninfo, "port=");
-    strcat(conninfo, config->port);
-    strcat(conninfo, " ");
-    strcat(conninfo, "dbname=");
-    strcat(conninfo, config->dbname);
-    strcat(conninfo, " ");
-    strcat(conninfo, "user=");
-    strcat(conninfo, config->dbname);
-    strcat(conninfo, " ");
-    strcat(conninfo, "password=");
-    strcat(conninfo, config->password);
+    conninfo = apr_psprintf(r->pool, "host=%s port=%s dbname=%s user=%s password=%s", 
+		                      config->hostname,
+				      config->port,
+				      config->dbname,
+				      config->username,
+				      config->password
+				      );
     conn = PQconnectdb(conninfo);
     if (PQstatus(conn) == CONNECTION_BAD)
     {
@@ -195,6 +186,13 @@ static int plpgsql_handler(request_rec *r)
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: ... ended");
     pgstatus = PQresultStatus(res);
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: pgstatus=%s", PQresStatus(pgstatus));
+    /* 
+     * we expect at least one row 
+     * */
+    if (pgstatus != PGRES_TUPLES_OK) {
+    	    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: return error 500");
+	    return HTTP_INTERNAL_SERVER_ERROR;
+    }
     cmdstatus = PQcmdStatus(res);
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: cmdstatus=%s", cmdstatus);
 
