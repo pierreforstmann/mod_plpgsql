@@ -4,8 +4,10 @@
 
 Install Apache and PostgreSQL development packages:
 
-`httpd-devel 2.4.37`
-`postgresql14-devel`
+```
+httpd-devel 2.4.37
+postgresql14-devel
+```
 
 If SELinux is enabled:
 
@@ -32,11 +34,18 @@ sudo make install
 ```
 
 Restart apache:
+
 `sudo apachectl start`
 
 Run in PostgreSQL database:
+
 `psql -h localhost -p 5436 -U test < mod_plsql.sql`
 
 Run:
-`curl http://localhost/pg/print` 
+```
+curl http://localhost/pg/print
+```
+You should get:
+```
 <h3>Hello from PostgreSQL</h3>
+```
