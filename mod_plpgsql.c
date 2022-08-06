@@ -54,6 +54,9 @@ typedef struct {
     char *dbname;
 } plpgsqlConfig;
 
+static	char *pg_call_statement;
+static	int  argc = 0;
+
 /*
  * Main apache functions
  */
@@ -106,6 +109,17 @@ static const char *plpgsql_dbname(cmd_parms *cmd, void *mconfig, const char *arg
     return NULL;
 }
 
+static int plpgsql_cbf(void *rec, const char *key, const char *value)
+{
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, ((request_rec *)rec)->server, "plpgsql_handler: plpgsql_cbf: key=%s value=%s", key, value);
+    if (argc == 0)
+	    pg_call_statement = apr_psprintf(((request_rec *)rec)->pool, "%s'%s'", pg_call_statement, value);
+    else
+	    pg_call_statement = apr_psprintf(((request_rec *)rec)->pool, "%s,'%s'", pg_call_statement, value);
+    argc++;
+    return 1;
+}
+
 static int plpgsql_handler(request_rec *r)
 {
     apr_table_t *args = NULL;
@@ -117,6 +131,7 @@ static int plpgsql_handler(request_rec *r)
     PGresult	*res;
     ExecStatusType pgstatus;
     char	*proc;
+    char	*endofprocname;
     char	*stmt = NULL;
     char	*cmdstatus;
     char	*value;
@@ -168,17 +183,30 @@ static int plpgsql_handler(request_rec *r)
 	return HTTP_INTERNAL_SERVER_ERROR;
     }
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: connected to PG" );
-    ap_args_to_table(r, &args);
 
+    if (r->args != NULL)
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: r->args=%s",r->args);
+    else
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: r->args=NULL");
+
+    ap_args_to_table(r, &args);
     /*
-     * procedure call syntax: /pg/<procedure>
+     * procedure call syntax: /pg/<procedure>?<parm1>=<value1>&<parm2>=<value2>
+     * all parameters of procedure must be character strings to build parameter list
      */
     proc = (char *)(uri.path + (4 * sizeof(char)));
+    endofprocname = strchr(uri.path, '?');
+    if (endofprocname != NULL)
+	   proc[endofprocname - proc] = '\0'; 
+
+    pg_call_statement = apr_psprintf(r->pool, "call %s(", proc);
+    apr_table_do(plpgsql_cbf, r, args, NULL);
+    pg_call_statement = apr_psprintf(r->pool, "%s)", pg_call_statement);
 
     /*
      * called procedure must write to a table because "raise notice" cannot be read with PQlib.
      */
-    stmt = apr_psprintf(r->pool, "call %s();select t from output order by x;", proc);
+    stmt = apr_psprintf(r->pool, "%s;select line from output order by id;", pg_call_statement);
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: running %s ...", stmt );
     res = PQexec(conn, stmt);
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: ... ended");
