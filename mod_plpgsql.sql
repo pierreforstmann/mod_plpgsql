@@ -16,13 +16,25 @@
 --
 -- mod_plpgsql.sql
 --
+create or replace procedure print0()
+as 
+$$
+begin
+drop table if exists output;
+create temp table output (id int generated always as identity, line text);
+insert into output(line) values('<h3>Hello from PostgreSQL </h3><br>');
+end;
+$$
+language plpgsql;
+--
+call print1('OK');select line from output order by id;
 create or replace procedure print1(parm text)
 as 
 $$
 begin
 drop table if exists output;
 create temp table output (id int generated always as identity, line text);
-insert into output(line) values('<h3>Hello from PostgreSQL: parm=' || parm || '</h3>');
+insert into output(line) values('<h3>Hello from PostgreSQL: parm=' || parm || '</h3><br>');
 end;
 $$
 language plpgsql;
@@ -35,7 +47,7 @@ $$
 begin
 drop table if exists output;
 create temp table output (id int generated always as identity, line text);
-insert into output(line) values('<h3>Hello from PostgreSQL: parm1=' || parm1 || ' parm2=' || parm2 || ' </h3>');
+insert into output(line) values('<h3>Hello from PostgreSQL: parm1=' || parm1 || ' parm2=' || parm2 || ' </h3><br>');
 end;
 $$
 language plpgsql;

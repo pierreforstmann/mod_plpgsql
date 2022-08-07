@@ -200,6 +200,7 @@ static int plpgsql_handler(request_rec *r)
 	   proc[endofprocname - proc] = '\0'; 
 
     pg_call_statement = apr_psprintf(r->pool, "call %s(", proc);
+    argc = 0;
     apr_table_do(plpgsql_cbf, r, args, NULL);
     pg_call_statement = apr_psprintf(r->pool, "%s)", pg_call_statement);
 
