@@ -48,9 +48,13 @@ Run in PostgreSQL database:
 ## test
 Run:
 ```
-curl http://localhost/pg/print
+$ curl 'http://localhost/pg/print0'
+<h3>Hello from PostgreSQL </h3><br>
+$ curl 'http://localhost/pg/print1?parm=OK'
+<h3>Hello from PostgreSQL: parm=OK</h3><br>
+$ curl 'http://localhost/pg/print2?parm1=123&parm2=abc'
+<h3>Hello from PostgreSQL: parm1=123 parm2=abc </h3><br>
+$ curl 'http://localhost/pg/print2?parm1=abc&parm2=123'
+<h3>Hello from PostgreSQL: parm1=abc parm2=123 </h3><br>
 ```
-You should get:
-```
-<h3>Hello from PostgreSQL</h3>
-```
+
