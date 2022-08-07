@@ -27,7 +27,7 @@ end;
 $$
 language plpgsql;
 --
-call print1('OK');select line from output order by id;
+call print0();select line from output order by id;
 create or replace procedure print1(parm text)
 as 
 $$
