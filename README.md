@@ -7,8 +7,8 @@ Setup instructions are for Alma Linux 8.6.
 Install Apache and PostgreSQL development packages:
 
 ```
-httpd-devel 2.4.37
-postgresql14-devel
+dnf install httpd-devel 2.4.37
+dnf install postgresql14-devel
 ```
 
 If SELinux is enabled:
