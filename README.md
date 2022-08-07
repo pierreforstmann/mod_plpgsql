@@ -19,7 +19,7 @@ Add to `/etc/httpd/conf/httpd.conf` section PostgreSQL connection data:
 
 ```
 <Location /pg/*>
-    SetHandler plpgsql-handler
+SetHandler plpgsql-handler
 PGusername test
 PGpassword test
 PGhostname localhost
