@@ -43,6 +43,8 @@ APLOG_USE_MODULE(plpgsql);
 
 #include "libpq-fe.h"
 
+#define _REENTRANT 1
+
 module AP_MODULE_DECLARE_DATA plpgsql;
 
 typedef struct {
@@ -54,8 +56,11 @@ typedef struct {
     char *dbname;
 } plpgsqlConfig;
 
-static	char *pg_call_statement;
-static	int  argc = 0;
+typedef struct {
+    int argc;
+    char *pg_call_statement;
+} module_config;
+
 
 /*
  * Main apache functions
@@ -111,12 +116,25 @@ static const char *plpgsql_dbname(cmd_parms *cmd, void *mconfig, const char *arg
 
 static int plpgsql_cbf(void *rec, const char *key, const char *value)
 {
+    module_config *data;
+    int argc;
+    char *pg_call_statement;
+
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, ((request_rec *)rec)->server, "plpgsql_handler: plpgsql_cbf: key=%s value=%s", key, value);
+
+    data = (module_config *)ap_get_module_config(((request_rec *)rec)->request_config, &plpgsql_module);
+    argc = data->argc;
+    pg_call_statement = data->pg_call_statement;
     if (argc == 0)
 	    pg_call_statement = apr_psprintf(((request_rec *)rec)->pool, "%s'%s'", pg_call_statement, value);
     else
 	    pg_call_statement = apr_psprintf(((request_rec *)rec)->pool, "%s,'%s'", pg_call_statement, value);
+
     argc++;
+    data->argc = argc;
+    data->pg_call_statement = pg_call_statement;
+    ap_set_module_config(((request_rec *)rec)->request_config, &plpgsql_module, data);
+
     return 1;
 }
 
@@ -136,6 +154,12 @@ static int plpgsql_handler(request_rec *r)
     char	*cmdstatus;
     char	*value;
     int		i;
+
+    /*
+     * use request module_config to have pg_call_statement and argc thread safe
+     */
+    module_config *data;
+    char *pg_call_statement;
 
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: entry");
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: filename=%s",r->filename );
@@ -199,10 +223,14 @@ static int plpgsql_handler(request_rec *r)
     if (endofprocname != NULL)
 	   proc[endofprocname - proc] = '\0'; 
 
-    pg_call_statement = apr_psprintf(r->pool, "call %s(", proc);
-    argc = 0;
+    data = apr_palloc(r->pool, sizeof(module_config));
+    data->pg_call_statement = apr_psprintf(r->pool, "call %s(", proc);
+    data->argc = 0; 
+    ap_set_module_config(r->request_config, &plpgsql_module, data);
     apr_table_do(plpgsql_cbf, r, args, NULL);
-    pg_call_statement = apr_psprintf(r->pool, "%s)", pg_call_statement);
+    data = ap_get_module_config(r->request_config, &plpgsql_module);
+    pg_call_statement = ((module_config *)data)->pg_call_statement;
+    pg_call_statement = apr_psprintf(r->pool, "%s)", data->pg_call_statement);
 
     /*
      * called procedure must write to a table because "raise notice" cannot be read with PQlib.
