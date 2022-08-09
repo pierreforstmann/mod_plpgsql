@@ -15,7 +15,7 @@ If SELinux is enabled:
 
 `setsebool -P httpd_can_network_connect 1`
 
-Add to `/etc/httpd/conf/httpd.conf` section with module handler and PostgreSQL connection data to be used:
+Add to `/etc/httpd/conf/httpd.conf` section with module handler and PostgreSQL connection parameters to be used:
 
 ```
 <Location /pg/*>
@@ -41,7 +41,7 @@ Restart Apache:
 
 `sudo apachectl start`
 
-Run in PostgreSQL database (using parameters added to `/etc/httpd/conf/httpd.conf`):
+Run in PostgreSQL database (using connection parameters added to `/etc/httpd/conf/httpd.conf`):
 
 `psql -h localhost -p 5436 -U test < mod_plpgsql.sql`
 
