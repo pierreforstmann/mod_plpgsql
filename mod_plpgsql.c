@@ -62,6 +62,12 @@ typedef struct {
 } module_config;
 
 
+typedef struct {
+    const char *key;
+    const char *value;
+} keyValuePair;
+
+
 /*
  * Main apache functions
  */
@@ -138,11 +144,45 @@ static int plpgsql_cbf(void *rec, const char *key, const char *value)
     return 1;
 }
 
+keyValuePair *readPost(request_rec *r) {
+    apr_array_header_t *pairs = NULL;
+    apr_off_t len;
+    apr_size_t size;
+    int res;
+    int i = 0;
+    char *buffer;
+    keyValuePair *kvp;
+
+    res = ap_parse_form_data(r, NULL, &pairs, -1, HUGE_STRING_LEN);
+    if (res != OK)
+	ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: ap_parse_form rc=%d\n", res);
+    if ( pairs == NULL)
+	ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: ap_parse_form pairs=NULL\n");
+    if (res != OK || !pairs) return NULL; /* Return NULL if we failed or if there are is no POST data */
+
+    kvp = apr_pcalloc(r->pool, sizeof(keyValuePair) * (pairs->nelts + 1));
+    while (pairs && !apr_is_empty_array(pairs)) {
+        ap_form_pair_t *pair = (ap_form_pair_t *) apr_array_pop(pairs);
+        apr_brigade_length(pair->value, 1, &len);
+        size = (apr_size_t) len;
+        buffer = apr_palloc(r->pool, size + 1);
+        apr_brigade_flatten(pair->value, buffer, &size);
+        buffer[len] = 0;
+        kvp[i].key = apr_pstrdup(r->pool, pair->name);
+        kvp[i].value = buffer;
+        i++;
+    }
+    return kvp;
+}
+
 static int plpgsql_handler(request_rec *r)
 {
     apr_table_t *args = NULL;
     apr_uri_t 	uri;
     apr_status_t status;
+
+    keyValuePair *formData;
+    int		post_nelts;
 
     char 	*conninfo;
     PGconn 	*conn;
@@ -193,6 +233,15 @@ static int plpgsql_handler(request_rec *r)
         return OK;
     }
 
+    if (r->method_number == M_GET) 
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: r->method_number=M_GET");
+    else if (r->method_number == M_POST) 
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: r->method_number=M_POST");
+    else {
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: method_number=%d", r->method_number);
+        return DECLINED;
+    }
+
     conninfo = apr_psprintf(r->pool, "host=%s port=%s dbname=%s user=%s password=%s", 
 		                      config->hostname,
 				      config->port,
@@ -214,6 +263,28 @@ static int plpgsql_handler(request_rec *r)
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: r->args=NULL");
 
     ap_args_to_table(r, &args);
+
+    post_nelts = 0;
+    formData = readPost(r);
+    if (formData) {
+        int i;
+        for (i = 0; &formData[i]; i++) {
+            if (formData[i].key && formData[i].value) {
+                ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: %s=%s", formData[i].key, formData[i].value);
+            } else if (formData[i].key) {
+                ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: %s", formData[i].key);
+            } else if (formData[i].value) {
+                ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: %s", formData[i].value);
+            } else {
+                break;
+            }
+        }
+        post_nelts = i;
+    } else
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: formData=NULL");
+	    
+
+
     /*
      * procedure call syntax: /pg/<procedure>?<parm1>=<value1>&<parm2>=<value2>
      * all parameters of procedure must be character strings to build parameter list
@@ -223,14 +294,31 @@ static int plpgsql_handler(request_rec *r)
     if (endofprocname != NULL)
 	   proc[endofprocname - proc] = '\0'; 
 
-    data = apr_palloc(r->pool, sizeof(module_config));
-    data->pg_call_statement = apr_psprintf(r->pool, "call %s(", proc);
-    data->argc = 0; 
-    ap_set_module_config(r->request_config, &plpgsql_module, data);
-    apr_table_do(plpgsql_cbf, r, args, NULL);
-    data = ap_get_module_config(r->request_config, &plpgsql_module);
-    pg_call_statement = ((module_config *)data)->pg_call_statement;
-    pg_call_statement = apr_psprintf(r->pool, "%s)", data->pg_call_statement);
+    if (r->method_number == M_GET) {
+    	data = apr_palloc(r->pool, sizeof(module_config));
+        data->pg_call_statement = apr_psprintf(r->pool, "call %s(", proc);
+        data->argc = 0; 
+        ap_set_module_config(r->request_config, &plpgsql_module, data);
+        apr_table_do(plpgsql_cbf, r, args, NULL);
+        data = ap_get_module_config(r->request_config, &plpgsql_module);
+        pg_call_statement = ((module_config *)data)->pg_call_statement;
+        pg_call_statement = apr_psprintf(r->pool, "%s)", data->pg_call_statement);
+    } else if (r->method_number == M_POST) {
+        pg_call_statement = apr_psprintf(r->pool, "call %s(", proc);
+        if (formData) {
+	    int k; 
+            for (k = post_nelts - 1 ; k >= 0; k--) {
+              ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: k=%d formData[k].value=%s", k, formData[k].value );
+              if (formData[k].value) {
+    		if (k == post_nelts - 1)
+	            pg_call_statement = apr_psprintf(r->pool, "%s'%s'", pg_call_statement, formData[k].value);
+                else
+	            pg_call_statement = apr_psprintf(r->pool, "%s,'%s'", pg_call_statement, formData[k].value);
+	      }
+	   }
+	}
+        pg_call_statement = apr_psprintf(r->pool, "%s)", pg_call_statement);
+    }
 
     /*
      * called procedure must write to a table because "raise notice" cannot be read with PQlib.
