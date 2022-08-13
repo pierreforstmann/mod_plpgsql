@@ -182,7 +182,6 @@ static int plpgsql_handler(request_rec *r)
     apr_status_t status;
 
     keyValuePair *formData;
-    int		post_nelts;
 
     char 	*conninfo;
     PGconn 	*conn;
@@ -264,11 +263,10 @@ static int plpgsql_handler(request_rec *r)
 
     ap_args_to_table(r, &args);
 
-    post_nelts = 0;
     formData = readPost(r);
     if (formData) {
         int i;
-        for (i = 0; &formData[i]; i++) {
+        for (i = 0; ; i++) {
             if (formData[i].key && formData[i].value) {
                 ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: %s=%s", formData[i].key, formData[i].value);
             } else if (formData[i].key) {
@@ -279,7 +277,6 @@ static int plpgsql_handler(request_rec *r)
                 break;
             }
         }
-        post_nelts = i;
     } else
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: formData=NULL");
 	    
@@ -306,19 +303,20 @@ static int plpgsql_handler(request_rec *r)
     } else if (r->method_number == M_POST) {
         pg_call_statement = apr_psprintf(r->pool, "call %s(", proc);
         if (formData) {
-	    int k; 
-            for (k = post_nelts - 1 ; k >= 0; k--) {
-              ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: k=%d formData[k].value=%s", k, formData[k].value );
-              if (formData[k].value) {
-    		if (k == post_nelts - 1)
-	            pg_call_statement = apr_psprintf(r->pool, "%s'%s'", pg_call_statement, formData[k].value);
-                else
-	            pg_call_statement = apr_psprintf(r->pool, "%s,'%s'", pg_call_statement, formData[k].value);
+            for (i = 0 ; ; i++) {
+                ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: i=%d formData[i].value=%s", i, formData[i].value );
+                if (formData[i].value) {
+    		     if (i == 0)
+	                pg_call_statement = apr_psprintf(r->pool, "%s'%s'", pg_call_statement, formData[i].value);
+                    else
+	               pg_call_statement = apr_psprintf(r->pool, "%s,'%s'", pg_call_statement, formData[i].value);
+		 } else {
+		     break;
+		 }
 	      }
 	   }
-	}
         pg_call_statement = apr_psprintf(r->pool, "%s)", pg_call_statement);
-    }
+	}
 
     /*
      * called procedure must write to a table because "raise notice" cannot be read with PQlib.
