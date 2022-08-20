@@ -132,9 +132,9 @@ static int plpgsql_cbf(void *rec, const char *key, const char *value)
     argc = data->argc;
     pg_call_statement = data->pg_call_statement;
     if (argc == 0)
-	    pg_call_statement = apr_psprintf(((request_rec *)rec)->pool, "%s'%s'", pg_call_statement, value);
+	    pg_call_statement = apr_psprintf(((request_rec *)rec)->pool, "%s%s => '%s'", pg_call_statement, key, value);
     else
-	    pg_call_statement = apr_psprintf(((request_rec *)rec)->pool, "%s,'%s'", pg_call_statement, value);
+	    pg_call_statement = apr_psprintf(((request_rec *)rec)->pool, "%s,%s => '%s'", pg_call_statement, key, value);
 
     argc++;
     data->argc = argc;
