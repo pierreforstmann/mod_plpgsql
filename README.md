@@ -66,12 +66,11 @@ $ curl 'http://localhost/pg/print2?parm2=value2&parm1=value1'
 $ curl 'http://localhost/pg/print2?parm1=value1&parm2=value2'
 <h3>Hello from PostgreSQL: parm1=value1 parm2=value2 </h3><br>
 
-$ curl 'http://localhost/pg/print2?parm2=value2&parm1=value1'
+$ curl -X POST -d 'parm2=value2' -d 'parm1=value1' http://localhost/pg/print2
 <h3>Hello from PostgreSQL: parm1=value1 parm2=value2 </h3><br>
 
-$ curl 'http://localhost/pg/print2?parm1=value1&parm2=value2'
+$ curl -X POST -d 'parm1=value1' -d 'parm2=value2' http://localhost/pg/print2
 <h3>Hello from PostgreSQL: parm1=value1 parm2=value2 </h3><br>
-
 
 ```
 
