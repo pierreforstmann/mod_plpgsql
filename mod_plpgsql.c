@@ -307,9 +307,9 @@ static int plpgsql_handler(request_rec *r)
                 ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, r->server, "plpgsql_handler: i=%d formData[i].value=%s", i, formData[i].value );
                 if (formData[i].value) {
     		     if (i == 0)
-	                pg_call_statement = apr_psprintf(r->pool, "%s'%s'", pg_call_statement, formData[i].value);
+	                pg_call_statement = apr_psprintf(r->pool, "%s%s => '%s'", pg_call_statement, formData[i].key, formData[i].value);
                     else
-	               pg_call_statement = apr_psprintf(r->pool, "%s,'%s'", pg_call_statement, formData[i].value);
+	               pg_call_statement = apr_psprintf(r->pool, "%s,%s => '%s'", pg_call_statement, formData[i].key, formData[i].value);
 		 } else {
 		     break;
 		 }
